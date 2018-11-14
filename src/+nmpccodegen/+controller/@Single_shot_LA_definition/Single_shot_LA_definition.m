@@ -1,11 +1,11 @@
 classdef Single_shot_LA_definition
     %SINGLE_SHOT_LA_DEFINITION Definition of single shot MPC problem with
     %Lagrangian
-    %   This internal class is used by nmpc_controller to generate the 
-    %   casadi cost function of the single shot definition with Lagrangian. 
+    %   This internal class is used by nmpc_controller to generate the
+    %   casadi cost function of the single shot definition with Lagrangian.
     %   And calls the Globals_generator class to generate the c-file.
     %   The Lagrangian is used when there are general constraints.
-    
+
     properties
         controller
         dimension
@@ -51,16 +51,16 @@ classdef Single_shot_LA_definition
             obj.controller = controller;
             obj.dimension = controller.model.number_of_inputs*controller.horizon;
         end
-        
+
         function [cost_function,cost_function_derivative_combined] = generate_cost_function(obj)
             % generate the cost function and general constraints function using casadi
             initial_state = casadi.SX.sym('initial_state', obj.controller.model.number_of_states, 1);
             state_reference = casadi.SX.sym('state_reference', obj.controller.model.number_of_states, 1);
             input_reference = casadi.SX.sym('input_reference', obj.controller.model.number_of_inputs, 1);
-            
+
             lambdas = casadi.SX.sym('lambdas',length(obj.controller.general_constraints)*obj.controller.horizon, 1);
             general_constraint_weights = casadi.SX.sym('general_constraint_weights',length(obj.controller.general_constraints)*obj.controller.horizon, 1);
-            
+
             static_casadi_parameters = vertcat(initial_state, state_reference,input_reference,...
                 lambdas,general_constraint_weights);
 
@@ -73,12 +73,13 @@ classdef Single_shot_LA_definition
                 input = input_all_steps(...
                     (i-1)*obj.controller.model.number_of_inputs+1:...
                     i*obj.controller.model.number_of_inputs);
-                
+
                 current_state = obj.controller.model.get_next_state(current_state,input);
 
+                % TODO: Add old_input here
                 cost = cost + obj.controller.calculate_stage_cost(current_state,input,i,state_reference,input_reference);
                 cost = cost + obj.controller.generate_cost_constraints(current_state,input,constraint_weights);
-                
+
                 % Extra terms associated with the lagrangian - lambda*c(x) + mu*c(c)^2
                 general_constraints_cost = obj.generate_cost_general_constraints(...
                         current_state,input,lambdas,general_constraint_weights,i);
@@ -88,27 +89,27 @@ classdef Single_shot_LA_definition
                 nmpccodegen.controller.Casadi_code_generator.setup_casadi_functions_and_generate_c(...
                     static_casadi_parameters,input_all_steps,constraint_weights,cost, ...
                     obj.controller.location);
-            
+
             % generate the general constraints functions
             constraint_values = casadi.SX.sym('constraint_values',length(obj.controller.general_constraints)*obj.controller.horizon, 1);
-            
+
             state = initial_state;
             for i=1:obj.controller.horizon
                 input = input_all_steps(...
                     (i-1)*obj.controller.model.number_of_inputs+1:...
                     i*obj.controller.model.number_of_inputs);
-                
+
                 state = obj.controller.model.get_next_state(state,input);
-                
+
                 constraint_values = obj.evaluate_constraints(state,input,...
                     constraint_values,i);
             end
-            
+
             nmpccodegen.controller.Casadi_code_generator.generate_c_constraints(...
                 initial_state,input_all_steps,constraint_values,obj.controller.location);
         end
-        
+
     end
-    
+
 end
 
